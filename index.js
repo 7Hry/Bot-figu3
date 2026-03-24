@@ -1,15 +1,15 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const { Sticker, StickerTypes } = require('wa-sticker-formatter');
-const sharp = require('sharp');
+const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const http = require('http');
 
 const PHONE_NUMBER = "5562981573734";
 
-// Servidor fake + keep-alive forte
+// Servidor fake para não ser morto
 http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot de figurinhas do Dedão rodando...\n');
+    res.writeHead(200);
+    res.end('Bot rodando');
 }).listen(process.env.PORT || 10000);
 
 console.log('🚀 Servidor fake iniciado');
@@ -22,8 +22,6 @@ async function conectar() {
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
         browser: ['Bot Figurinhas Dedão', 'Chrome', '1.0'],
-        connectTimeoutMs: 180000,
-        defaultQueryTimeoutMs: 180000,
     });
 
     sock.ev.on('connection.update', async (update) => {
@@ -34,7 +32,7 @@ async function conectar() {
                 const code = await sock.requestPairingCode(PHONE_NUMBER);
                 console.log('\n🔑 CÓDIGO DE PAREAMENTO:');
                 console.log(code);
-                console.log('\nAbra WhatsApp Business → Configurações → Dispositivos vinculados → "Conectar com número de telefone"');
+                console.log('\nWhatsApp Business → Configurações → Dispositivos vinculados → "Conectar com número de telefone"');
                 console.log('Digite o código acima');
             } catch (e) {
                 console.log('Pairing falhou, mostrando QR Code...');
@@ -47,8 +45,8 @@ async function conectar() {
         }
 
         if (connection === 'close') {
-            console.log('Conexão fechada. Reconectando em 12 segundos...');
-            setTimeout(conectar, 12000);
+            console.log('Conexão fechada. Reconectando em 10 segundos...');
+            setTimeout(conectar, 10000);
         }
     });
 
@@ -67,25 +65,16 @@ async function conectar() {
 
         if (!hasMedia && texto !== '/s' && texto !== '/s2') return;
 
-        const isAchatado = texto === '/s' || texto.startsWith('/s ');
-
-        console.log(`📸 Modo: ${isAchatado ? 'ACHATADO' : 'NORMAL'}`);
+        console.log('📸 Criando sticker...');
 
         try {
             const buffer = await sock.downloadMediaMessage(msg);
 
-            let finalBuffer = buffer;
-            if (isAchatado) {
-                finalBuffer = await sharp(buffer).resize(512, 512, { fit: 'fill' }).webp({ quality: 70 }).toBuffer();
-            } else {
-                finalBuffer = await sharp(buffer).resize(512, 512, { fit: 'inside' }).webp({ quality: 80 }).toBuffer();
-            }
-
-            const sticker = new Sticker(finalBuffer, {
+            const sticker = new Sticker(buffer, {
                 pack: 'Bot do',
                 author: 'Dedão',
                 type: StickerTypes.FULL,
-                quality: 75,
+                quality: 80,
             });
 
             const stickerBuffer = await sticker.toBuffer();
