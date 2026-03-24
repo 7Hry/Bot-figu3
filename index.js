@@ -1,12 +1,13 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const { Sticker, StickerTypes } = require('wa-sticker-formatter');
 const sharp = require('sharp');
+const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const http = require('http');
 
 const PHONE_NUMBER = "5562981573734";
 
-// Servidor fake para Railway/Render
+// Servidor fake obrigatório
 http.createServer((req, res) => res.end('Bot rodando')).listen(process.env.PORT || 10000);
 
 async function conectar() {
@@ -23,6 +24,7 @@ async function conectar() {
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
+        // Tenta pairing code primeiro
         if (qr || connection === 'connecting') {
             try {
                 const code = await sock.requestPairingCode(PHONE_NUMBER);
@@ -30,9 +32,17 @@ async function conectar() {
                 console.log(code);
                 console.log('\nWhatsApp Business → Configurações → Dispositivos vinculados → "Conectar com número de telefone"');
                 console.log('Digite o código acima');
+                return;
             } catch (e) {
-                console.log('Tentando gerar código novamente...');
+                console.log('Pairing code falhou, mostrando QR Code...');
             }
+        }
+
+        // Fallback para QR Code
+        if (qr) {
+            console.log('\n🔥 QR CODE:');
+            qrcode.generate(qr, { small: true });
+            console.log('\nEscaneie com o WhatsApp Business');
         }
 
         if (connection === 'open') {
@@ -68,17 +78,10 @@ async function conectar() {
             const buffer = await sock.downloadMediaMessage(msg);
 
             let finalBuffer = buffer;
-
             if (isAchatado) {
-                finalBuffer = await sharp(buffer)
-                    .resize(512, 512, { fit: 'fill' })
-                    .webp({ quality: 70 })
-                    .toBuffer();
+                finalBuffer = await sharp(buffer).resize(512, 512, { fit: 'fill' }).webp({ quality: 70 }).toBuffer();
             } else {
-                finalBuffer = await sharp(buffer)
-                    .resize(512, 512, { fit: 'inside' })
-                    .webp({ quality: 80 })
-                    .toBuffer();
+                finalBuffer = await sharp(buffer).resize(512, 512, { fit: 'inside' }).webp({ quality: 80 }).toBuffer();
             }
 
             const sticker = new Sticker(finalBuffer, {
@@ -91,8 +94,6 @@ async function conectar() {
             const stickerBuffer = await sticker.toBuffer();
 
             await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: msg });
-
-            console.log('✅ Sticker enviado!');
 
         } catch (err) {
             console.error(err);
