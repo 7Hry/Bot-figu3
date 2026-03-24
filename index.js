@@ -1,14 +1,18 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const { Sticker, StickerTypes } = require('wa-sticker-formatter');
 const sharp = require('sharp');
-const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const http = require('http');
 
 const PHONE_NUMBER = "5562981573734";
 
-// Servidor fake obrigatório
-http.createServer((req, res) => res.end('Bot rodando')).listen(process.env.PORT || 10000);
+// Servidor fake + keep-alive forte
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot de figurinhas do Dedão rodando...\n');
+}).listen(process.env.PORT || 10000);
+
+console.log('🚀 Servidor fake iniciado');
 
 async function conectar() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
@@ -18,31 +22,24 @@ async function conectar() {
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
         browser: ['Bot Figurinhas Dedão', 'Chrome', '1.0'],
-        connectTimeoutMs: 120000,
+        connectTimeoutMs: 180000,
+        defaultQueryTimeoutMs: 180000,
     });
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        // Tenta pairing code primeiro
         if (qr || connection === 'connecting') {
             try {
                 const code = await sock.requestPairingCode(PHONE_NUMBER);
                 console.log('\n🔑 CÓDIGO DE PAREAMENTO:');
                 console.log(code);
-                console.log('\nWhatsApp Business → Configurações → Dispositivos vinculados → "Conectar com número de telefone"');
+                console.log('\nAbra WhatsApp Business → Configurações → Dispositivos vinculados → "Conectar com número de telefone"');
                 console.log('Digite o código acima');
-                return;
             } catch (e) {
-                console.log('Pairing code falhou, mostrando QR Code...');
+                console.log('Pairing falhou, mostrando QR Code...');
+                if (qr) qrcode.generate(qr, { small: true });
             }
-        }
-
-        // Fallback para QR Code
-        if (qr) {
-            console.log('\n🔥 QR CODE:');
-            qrcode.generate(qr, { small: true });
-            console.log('\nEscaneie com o WhatsApp Business');
         }
 
         if (connection === 'open') {
@@ -50,8 +47,8 @@ async function conectar() {
         }
 
         if (connection === 'close') {
-            console.log('Conexão fechada. Reconectando em 10 segundos...');
-            setTimeout(conectar, 10000);
+            console.log('Conexão fechada. Reconectando em 12 segundos...');
+            setTimeout(conectar, 12000);
         }
     });
 
